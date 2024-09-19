@@ -1,0 +1,175 @@
+<!-- livebook:{"persist_outputs":true} -->
+
+# 1. Raw process message exchange
+
+## Message exchange basic
+
+Simple example of message exchanging between two Elixir processes.
+
+```elixir
+defmodule DLI.RawProcess do
+  def listen do
+    receive do
+      msg ->
+        IO.puts("Received raw message: #{msg}")
+        # Recursive, keep the process alive
+        listen()
+    end
+  end
+end
+
+pid = spawn(DLI.RawProcess, :listen, [])
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#PID<0.238.0>
+```
+
+The below call will match with the second arm from `receive` function.
+
+```elixir
+send(pid, "Test message")
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+"Test message"
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+Received raw message: Test message
+```
+
+The below call will match with the first arm from `receive` function.
+
+```elixir
+Process.exit(pid, :kill)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+true
+```
+
+## Response to caller
+
+```elixir
+defmodule DLI.RawProcessWithResponse do
+  def listen do
+    receive do
+      {:ping, %{sender: sender, msg: msg}} ->
+        IO.puts("Receive ping message from #{inspect(sender)}, msg=#{msg}")
+        listen()
+    end
+  end
+end
+
+pid = spawn(DLI.RawProcessWithResponse, :listen, [])
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#PID<0.264.0>
+```
+
+```elixir
+send(pid, {:ping, %{sender: self(), msg: "ping"}})
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:ping, %{msg: "ping", sender: #PID<0.154.0>}}
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+Receive ping message from #PID<0.154.0>, msg=ping
+```
+
+```elixir
+Process.exit(pid, :kill)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+true
+```
+
+## Simple KeyValueStorage using raw process
+
+```elixir
+defmodule DLI.RawProcessKeyValueStorage do
+  def start() do
+    spawn(fn -> loop(%{}) end)
+  end
+
+  defp loop(state) do
+    receive do
+      {:put, key, value, caller} ->
+        new_state = Map.put(state, key, value)
+        send(caller, {:ok, key, value})
+        loop(new_state)
+
+      {:get, key, caller} ->
+        value = Map.get(state, key, :not_found)
+        send(caller, {:ok, value})
+        loop(state)
+    end
+  end
+end
+
+pid = DLI.RawProcessKeyValueStorage.start()
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#PID<0.289.0>
+```
+
+```elixir
+send(pid, {:put, :foo, "bar", self()})
+
+receive do
+  val -> IO.puts("Response: #{inspect(val)}")
+end
+
+send(pid, {:get, :foo, self()})
+
+receive do
+  val -> IO.puts("Response: #{inspect(val)}")
+end
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+Response: {:ok, :foo, "bar"}
+Response: {:ok, "bar"}
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:ok
+```
+
+```elixir
+Process.exit(pid, :kill)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+true
+```
