@@ -1,0 +1,71 @@
+# 2. Agent introduction
+
+## Section
+
+`Agent` is a high-level wrapper for some typical message exchange between processes. In general we do not need to:
+
+* Manually write `receive/0` block to receive the message.
+* Quickly send message to the target server without the need of using `send/3`.
+
+Basically, `Agent.update/2` and `Agent.get/1` will:
+
+* Prepare the message structure, including getting the sender process id using `self()`.
+* Send the message to the target `Agent` process.
+* Receive message (if needed), then parse the response.
+
+All messages format follow the convention from OTP and be hidden from public use.
+
+```elixir
+defmodule AgentKeyValueStore do
+  # Start an agent with an empty map as the initial state
+  def start() do
+    Agent.start(fn -> %{} end, name: __MODULE__)
+  end
+
+  # Function to store a key-value pair
+  def put(key, value) do
+    Agent.update(__MODULE__, fn state -> Map.put(state, key, value) end)
+  end
+
+  # Function to retrieve a value by key
+  def get(key) do
+    Agent.get(__MODULE__, fn state -> Map.get(state, key, :not_found) end)
+  end
+end
+
+pid =
+  case AgentKeyValueStore.start() do
+    {:error, {:already_started, pid}} -> pid
+    {:ok, pid} -> pid
+  end
+```
+
+```elixir
+AgentKeyValueStore.put(:foo, "bar")
+```
+
+```elixir
+AgentKeyValueStore.get(:foo)
+```
+
+```elixir
+AgentKeyValueStore.get(:test)
+```
+
+```elixir
+:sys.get_state(pid)
+```
+
+```elixir
+:sys.replace_state(pid, fn state ->
+  Map.put(state, :test, "test")
+end)
+```
+
+```elixir
+AgentKeyValueStore.get(:test)
+```
+
+```elixir
+Process.exit(pid, :kill)
+```

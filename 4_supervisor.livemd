@@ -1,0 +1,86 @@
+# 4. Supervisor
+
+## Section
+
+The main usage of `Supervisor` is to keep the tree of processes. If there's any failure in one process it will quickly create a new one instead.
+
+```elixir
+defmodule DateTimeStore do
+  use GenServer
+
+  # Public API
+
+  def start_link(_args) do
+    GenServer.start_link(__MODULE__, %{datetime: nil}, name: __MODULE__)
+  end
+
+  def get_datetime do
+    GenServer.call(__MODULE__, :get_datetime)
+  end
+
+  # GenServer Callbacks
+  def init(state) do
+    # Set up a timer to send a message every 5000 ms (5 seconds)
+    :timer.send_interval(5000, :check_datetime)
+    {:ok, state}
+  end
+
+  def handle_info(:check_datetime, state) do
+    # Fetch the current datetime and store it in the state
+    current_datetime = DateTime.utc_now()
+    {:noreply, %{state | datetime: current_datetime}}
+  end
+
+  def handle_call(:get_datetime, _from, %{datetime: nil} = state) do
+    {:reply, :no_datetime_stored, state}
+  end
+
+  def handle_call(:get_datetime, _from, %{datetime: datetime} = state) do
+    # Return the stored datetime
+    {:reply, datetime, state}
+  end
+end
+```
+
+```elixir
+defmodule DateTimeSupervisor do
+  use Supervisor
+
+  # Public API to start the supervisor
+  def start_link(_args) do
+    Supervisor.start_link(__MODULE__, :ok, name: __MODULE__)
+  end
+
+  # Supervisor initialization callback
+  @impl true
+  def init(:ok) do
+    # Define child processes to supervise
+    children = [
+      # Start the DateTimeStore GenServer
+      {DateTimeStore, []}
+    ]
+
+    # Start the children using the one_for_one strategy
+    Supervisor.init(children, strategy: :one_for_one)
+  end
+end
+```
+
+```elixir
+DateTimeSupervisor.start_link([])
+```
+
+```elixir
+pid = Process.whereis(DateTimeStore)
+IO.puts("PID = #{inspect(pid)}")
+
+DateTimeStore.get_datetime()
+```
+
+```elixir
+Process.exit(pid, :kill)
+```
+
+```elixir
+Supervisor.stop(DateTimeSupervisor, :normal)
+```

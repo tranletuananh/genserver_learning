@@ -7,7 +7,7 @@
 Simple example of message exchanging between two Elixir processes.
 
 ```elixir
-defmodule DLI.RawProcess do
+defmodule RawProcess do
   def listen do
     receive do
       msg ->
@@ -18,13 +18,13 @@ defmodule DLI.RawProcess do
   end
 end
 
-pid = spawn(DLI.RawProcess, :listen, [])
+pid = spawn(RawProcess, :listen, [])
 ```
 
 <!-- livebook:{"output":true} -->
 
 ```
-#PID<0.238.0>
+#PID<0.161.0>
 ```
 
 The below call will match with the second arm from `receive` function.
@@ -39,16 +39,16 @@ send(pid, "Test message")
 "Test message"
 ```
 
-<!-- livebook:{"output":true} -->
-
-```
-Received raw message: Test message
-```
-
 The below call will match with the first arm from `receive` function.
 
 ```elixir
 Process.exit(pid, :kill)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+Received raw message: Test message
 ```
 
 <!-- livebook:{"output":true} -->
@@ -60,7 +60,7 @@ true
 ## Response to caller
 
 ```elixir
-defmodule DLI.RawProcessWithResponse do
+defmodule RawProcessWithResponse do
   def listen do
     receive do
       {:ping, %{sender: sender, msg: msg}} ->
@@ -70,13 +70,13 @@ defmodule DLI.RawProcessWithResponse do
   end
 end
 
-pid = spawn(DLI.RawProcessWithResponse, :listen, [])
+pid = spawn(RawProcessWithResponse, :listen, [])
 ```
 
 <!-- livebook:{"output":true} -->
 
 ```
-#PID<0.264.0>
+#PID<0.171.0>
 ```
 
 ```elixir
@@ -86,17 +86,17 @@ send(pid, {:ping, %{sender: self(), msg: "ping"}})
 <!-- livebook:{"output":true} -->
 
 ```
-{:ping, %{msg: "ping", sender: #PID<0.154.0>}}
+{:ping, %{msg: "ping", sender: #PID<0.153.0>}}
+```
+
+```elixir
+Process.exit(pid, :kill)
 ```
 
 <!-- livebook:{"output":true} -->
 
 ```
-Receive ping message from #PID<0.154.0>, msg=ping
-```
-
-```elixir
-Process.exit(pid, :kill)
+Receive ping message from #PID<0.153.0>, msg=ping
 ```
 
 <!-- livebook:{"output":true} -->
@@ -108,7 +108,7 @@ true
 ## Simple KeyValueStorage using raw process
 
 ```elixir
-defmodule DLI.RawProcessKeyValueStorage do
+defmodule RawProcessKeyValueStorage do
   def start() do
     spawn(fn -> loop(%{}) end)
   end
@@ -128,16 +128,22 @@ defmodule DLI.RawProcessKeyValueStorage do
   end
 end
 
-pid = DLI.RawProcessKeyValueStorage.start()
+pid = RawProcessKeyValueStorage.start()
 ```
 
 <!-- livebook:{"output":true} -->
 
 ```
-#PID<0.289.0>
+#PID<0.181.0>
 ```
 
 ```elixir
+send(pid, {:get, :foo, self()})
+
+receive do
+  val -> IO.puts("Response: #{inspect(val)}")
+end
+
 send(pid, {:put, :foo, "bar", self()})
 
 receive do
@@ -154,6 +160,7 @@ end
 <!-- livebook:{"output":true} -->
 
 ```
+Response: {:ok, :not_found}
 Response: {:ok, :foo, "bar"}
 Response: {:ok, "bar"}
 ```

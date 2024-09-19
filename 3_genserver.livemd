@@ -1,0 +1,125 @@
+# 3. GenServer
+
+## Simple key value storage using GenServer
+
+`GenServer` is also kind of like `Agent`. The difference is that `Agent` only support a limit set of interaction (`Agent.update`, `Agent.get`, `Agent.cast`). Because of that it lacks the ability to do background tasks by itself.
+
+`GenServer` is a more advanced form. It supports generic handlers like `handle_cast`, `handle_info`, `handle_call` (with pattern matching) and the ability to send a message directly to itself.
+
+```elixir
+defmodule KeyValueStore do
+  use GenServer
+
+  # Public API
+  def start(initial_state \\ %{}) do
+    GenServer.start(__MODULE__, initial_state, name: __MODULE__)
+  end
+
+  def put(key, value) do
+    GenServer.cast(__MODULE__, {:put, key, value})
+  end
+
+  def get(key) do
+    GenServer.call(__MODULE__, {:get, key})
+  end
+
+  def delete(key) do
+    GenServer.cast(__MODULE__, {:delete, key})
+  end
+
+  # GenServer Callbacks
+  def init(initial_state) do
+    {:ok, initial_state}
+  end
+
+  def handle_cast({:put, key, value}, state) do
+    # Update the state with the new key-value pair
+    new_state = Map.put(state, key, value)
+    {:noreply, new_state}
+  end
+
+  def handle_cast({:delete, key}, state) do
+    # Remove the key from the state
+    new_state = Map.delete(state, key)
+    {:noreply, new_state}
+  end
+
+  def handle_call({:get, key}, _from, state) do
+    # Retrieve the value associated with the key or return :not_found
+    value = Map.get(state, key, :not_found)
+    {:reply, value, state}
+  end
+end
+
+pid =
+  case KeyValueStore.start() do
+    {:ok, pid} -> pid
+    {:error, {:already_started, pid}} -> pid
+  end
+```
+
+```elixir
+KeyValueStore.put(:foo, "bar")
+IO.puts("Retrieved foo = #{KeyValueStore.get(:foo)}")
+KeyValueStore.delete(:foo)
+```
+
+```elixir
+Process.exit(pid, :kill)
+```
+
+## Time checking GenServer
+
+Example for the ability to work indepently.
+
+```elixir
+defmodule DateTimeStore do
+  use GenServer
+
+  # Public API
+
+  def start() do
+    GenServer.start(__MODULE__, %{datetime: nil}, name: __MODULE__)
+  end
+
+  def get_datetime do
+    GenServer.call(__MODULE__, :get_datetime)
+  end
+
+  # GenServer Callbacks
+  def init(state) do
+    # Set up a timer to send a message every 5000 ms (5 seconds)
+    :timer.send_interval(5000, :check_datetime)
+    {:ok, state}
+  end
+
+  def handle_info(:check_datetime, state) do
+    # Fetch the current datetime and store it in the state
+    current_datetime = DateTime.utc_now()
+    {:noreply, %{state | datetime: current_datetime}}
+  end
+
+  def handle_call(:get_datetime, _from, %{datetime: nil} = state) do
+    {:reply, :no_datetime_stored, state}
+  end
+
+  def handle_call(:get_datetime, _from, %{datetime: datetime} = state) do
+    # Return the stored datetime
+    {:reply, datetime, state}
+  end
+end
+
+pid =
+  case DateTimeStore.start() do
+    {:ok, pid} -> pid
+    {:error, {:already_started, pid}} -> pid
+  end
+```
+
+```elixir
+IO.puts("Fetched datetime: #{DateTimeStore.get_datetime()}")
+```
+
+```elixir
+Process.exit(pid, :kill)
+```
